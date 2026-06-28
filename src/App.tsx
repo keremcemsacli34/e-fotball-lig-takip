@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import './App.css'
+import { isSupabaseConfigured, loadRemoteLeagueData, saveRemoteLeagueData } from './supabaseStore'
 
 type Team = {
   id: string
@@ -52,6 +53,7 @@ type LeagueData = {
 
 type Tab = 'standings' | 'matches' | 'leaders' | 'manage'
 type Theme = 'dark' | 'light'
+type SyncStatus = 'local' | 'loading' | 'synced' | 'syncing' | 'error'
 
 type Standing = Team & {
   played: number
@@ -200,6 +202,8 @@ const normalizePlayerName = (name: string) => name.trim().toLocaleLowerCase('tr-
 
 function App() {
   const [data, setData] = useState<LeagueData>(loadData)
+  const initialDataRef = useRef(data)
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(isSupabaseConfigured ? 'loading' : 'local')
   const [activeTab, setActiveTab] = useState<Tab>('standings')
   const [theme, setTheme] = useState<Theme>(loadTheme)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -219,9 +223,47 @@ function App() {
   })
   const [goalDrafts, setGoalDrafts] = useState<GoalDraft[]>([])
 
+  useEffect(() => {
+    let isActive = true
+
+    if (!isSupabaseConfigured) return
+
+    const loadSharedData = async () => {
+      try {
+        const remoteData = await loadRemoteLeagueData()
+        if (!isActive) return
+
+        if (remoteData) {
+          const migratedData = migrateData(remoteData)
+          setData(migratedData)
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(migratedData))
+        } else {
+          await saveRemoteLeagueData(initialDataRef.current)
+        }
+
+        if (isActive) setSyncStatus('synced')
+      } catch {
+        if (isActive) setSyncStatus('error')
+      }
+    }
+
+    void loadSharedData()
+
+    return () => {
+      isActive = false
+    }
+  }, [])
+
   const saveData = (nextData: LeagueData) => {
     setData(nextData)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(nextData))
+
+    if (isSupabaseConfigured) {
+      setSyncStatus('syncing')
+      void saveRemoteLeagueData(nextData)
+        .then(() => setSyncStatus('synced'))
+        .catch(() => setSyncStatus('error'))
+    }
   }
 
   const teamById = useMemo(
@@ -603,6 +645,13 @@ function App() {
         <div>
           <p className="eyebrow">e-football lig</p>
           <h1>Mevcut Lig</h1>
+          <span className={`sync-pill ${syncStatus}`}>
+            {syncStatus === 'local' && 'Yerel veri'}
+            {syncStatus === 'loading' && 'Ortak veri yükleniyor'}
+            {syncStatus === 'syncing' && 'Kaydediliyor'}
+            {syncStatus === 'synced' && 'Ortak veri aktif'}
+            {syncStatus === 'error' && 'Bağlantı hatası'}
+          </span>
         </div>
 
         <div className="top-actions">

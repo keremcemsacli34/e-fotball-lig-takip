@@ -74,6 +74,30 @@ h1 {
   line-height: 1.05;
 }
 
+.sync-pill {
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 900;
+  margin-top: 8px;
+  padding: 4px 8px;
+}
+
+.sync-pill.synced {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+  color: var(--accent);
+}
+
+.sync-pill.error {
+  background: color-mix(in srgb, var(--red) 14%, var(--surface));
+  border-color: color-mix(in srgb, var(--red) 42%, var(--border));
+  color: var(--red);
+}
+
 h2 {
   color: var(--ink);
   font-size: 20px;
