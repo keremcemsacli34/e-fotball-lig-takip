@@ -207,6 +207,7 @@ function App() {
   const [adminError, setAdminError] = useState('')
   const [teamName, setTeamName] = useState('')
   const [teamOwner, setTeamOwner] = useState('')
+  const [editingTeamId, setEditingTeamId] = useState('')
   const [editingMatchId, setEditingMatchId] = useState('')
   const [matchDraft, setMatchDraft] = useState({
     homeTeamId: data.teams[0]?.id ?? '',
@@ -333,19 +334,46 @@ function App() {
     setAdminPassword('')
     setAdminError('')
     setEditingMatchId('')
+    setEditingTeamId('')
+    setTeamName('')
+    setTeamOwner('')
     setActiveTab('standings')
   }
 
-  const addTeam = (event: FormEvent) => {
+  const clearTeamForm = () => {
+    setEditingTeamId('')
+    setTeamName('')
+    setTeamOwner('')
+  }
+
+  const editTeam = (team: Team) => {
+    setEditingTeamId(team.id)
+    setTeamName(team.name)
+    setTeamOwner(team.owner)
+  }
+
+  const saveTeam = (event: FormEvent) => {
     event.preventDefault()
     const trimmedName = teamName.trim()
     const trimmedOwner = teamOwner.trim()
     if (!trimmedName) return
 
+    if (editingTeamId) {
+      saveData({
+        ...data,
+        teams: data.teams.map((team) => (
+          team.id === editingTeamId
+            ? { ...team, name: trimmedName, owner: trimmedOwner || trimmedName }
+            : team
+        )),
+      })
+      clearTeamForm()
+      return
+    }
+
     const newTeam = { id: makeId('team'), name: trimmedName, owner: trimmedOwner || trimmedName }
     saveData({ ...data, teams: [...data.teams, newTeam] })
-    setTeamName('')
-    setTeamOwner('')
+    clearTeamForm()
     if (!matchDraft.homeTeamId) {
       setMatchDraft({ ...matchDraft, homeTeamId: newTeam.id })
     }
@@ -359,6 +387,9 @@ function App() {
     const fallbackAway = nextTeams.find((team) => team.id !== fallbackHome)?.id ?? ''
 
     saveData({ teams: nextTeams, players: nextPlayers, matches: nextMatches })
+    if (editingTeamId === teamId) {
+      clearTeamForm()
+    }
     setMatchDraft((current) => ({
       ...current,
       homeTeamId: current.homeTeamId === teamId ? fallbackHome : current.homeTeamId,
@@ -882,22 +913,34 @@ function App() {
                   )}
                 </form>
 
-                <form className="form-panel" onSubmit={addTeam}>
-                  <h3>Takımlar</h3>
+                <form className="form-panel" onSubmit={saveTeam}>
+                  <div className="form-heading">
+                    <h3>{editingTeamId ? 'Takımı Düzenle' : 'Takımlar'}</h3>
+                    {editingTeamId && (
+                      <button className="text-button" type="button" onClick={clearTeamForm}>
+                        Vazgeç
+                      </button>
+                    )}
+                  </div>
                   <div className="team-create-grid">
                     <input value={teamName} onChange={(event) => setTeamName(event.target.value)} placeholder="Takım adı" />
                     <input value={teamOwner} onChange={(event) => setTeamOwner(event.target.value)} placeholder="Sahibi" />
                     <button className="icon-button" type="submit" aria-label="Takım ekle">
-                      <Icon name="plus" />
+                      <Icon name={editingTeamId ? 'check' : 'plus'} />
                     </button>
                   </div>
                   <div className="team-manage-list">
                     {data.teams.map((team) => (
                       <div className="team-manage-row" key={team.id}>
                         <TeamLabel team={team} />
-                        <button className="text-button danger" type="button" onClick={() => deleteTeam(team.id)}>
-                          Sil
-                        </button>
+                        <div className="team-actions">
+                          <button className="text-button" type="button" onClick={() => editTeam(team)}>
+                            Düzenle
+                          </button>
+                          <button className="text-button danger" type="button" onClick={() => deleteTeam(team.id)}>
+                            Sil
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1056,7 +1099,7 @@ function NavButton({
   )
 }
 
-function Icon({ name }: { name: 'chart' | 'close' | 'crown' | 'edit' | 'list' | 'lock' | 'moon' | 'plus' | 'shield' | 'sun' | 'trophy' }) {
+function Icon({ name }: { name: 'chart' | 'check' | 'close' | 'crown' | 'edit' | 'list' | 'lock' | 'moon' | 'plus' | 'shield' | 'sun' | 'trophy' }) {
   const paths = {
     chart: (
       <>
@@ -1067,6 +1110,7 @@ function Icon({ name }: { name: 'chart' | 'close' | 'crown' | 'edit' | 'list' | 
         <path d="M16 16v-3" />
       </>
     ),
+    check: <path d="m5 12 4 4L19 6" />,
     close: (
       <>
         <path d="m6 6 12 12" />

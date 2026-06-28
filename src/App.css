@@ -533,6 +533,13 @@ label {
   padding-top: 10px;
 }
 
+.team-actions {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 12px;
+}
+
 .team-manage-row span {
   color: var(--ink);
   font-weight: 850;
