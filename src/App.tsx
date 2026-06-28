@@ -72,6 +72,15 @@ const today = now.toISOString().slice(0, 10)
 const defaultTime = '20:00'
 const defaultDateTime = `${today}T${defaultTime}`
 
+const createDefaultMatchDraft = (teams: Team[]) => ({
+  homeTeamId: teams[0]?.id ?? '',
+  awayTeamId: teams[1]?.id ?? '',
+  status: 'played' as MatchStatus,
+  scheduledAt: defaultDateTime,
+  homeScore: 0,
+  awayScore: 0,
+})
+
 const initialData: LeagueData = {
   teams: [
     { id: 'team-kerem', name: 'Kerem FC', owner: 'Kerem' },
@@ -213,14 +222,7 @@ function App() {
   const [teamOwner, setTeamOwner] = useState('')
   const [editingTeamId, setEditingTeamId] = useState('')
   const [editingMatchId, setEditingMatchId] = useState('')
-  const [matchDraft, setMatchDraft] = useState({
-    homeTeamId: data.teams[0]?.id ?? '',
-    awayTeamId: data.teams[1]?.id ?? '',
-    status: 'played' as MatchStatus,
-    scheduledAt: defaultDateTime,
-    homeScore: 0,
-    awayScore: 0,
-  })
+  const [matchDraft, setMatchDraft] = useState(createDefaultMatchDraft(data.teams))
   const [goalDrafts, setGoalDrafts] = useState<GoalDraft[]>([])
 
   useEffect(() => {
@@ -236,6 +238,15 @@ function App() {
         if (remoteData) {
           const migratedData = migrateData(remoteData)
           setData(migratedData)
+          setMatchDraft((current) => {
+            const homeIsValid = migratedData.teams.some((team) => team.id === current.homeTeamId)
+            const awayIsValid = migratedData.teams.some((team) => team.id === current.awayTeamId)
+            if (homeIsValid && awayIsValid && current.homeTeamId !== current.awayTeamId) {
+              return current
+            }
+            return { ...current, ...createDefaultMatchDraft(migratedData.teams) }
+          })
+          setGoalDrafts([])
           localStorage.setItem(STORAGE_KEY, JSON.stringify(migratedData))
         } else {
           await saveRemoteLeagueData(initialDataRef.current)
@@ -382,6 +393,10 @@ function App() {
     setActiveTab('standings')
   }
 
+  const getFallbackAwayTeamId = (homeTeamId: string, teams = data.teams) => (
+    teams.find((team) => team.id !== homeTeamId)?.id ?? ''
+  )
+
   const clearTeamForm = () => {
     setEditingTeamId('')
     setTeamName('')
@@ -417,7 +432,7 @@ function App() {
     saveData({ ...data, teams: [...data.teams, newTeam] })
     clearTeamForm()
     if (!matchDraft.homeTeamId) {
-      setMatchDraft({ ...matchDraft, homeTeamId: newTeam.id })
+      setMatchDraft({ ...matchDraft, homeTeamId: newTeam.id, awayTeamId: getFallbackAwayTeamId(newTeam.id, [...data.teams, newTeam]) })
     }
   }
 
@@ -545,20 +560,19 @@ function App() {
 
   const clearMatchForm = () => {
     setEditingMatchId('')
-    setMatchDraft({
-      homeTeamId: data.teams[0]?.id ?? '',
-      awayTeamId: data.teams[1]?.id ?? '',
-      status: 'played',
-      scheduledAt: defaultDateTime,
-      homeScore: 0,
-      awayScore: 0,
-    })
+    setMatchDraft(createDefaultMatchDraft(data.teams))
     setGoalDrafts([])
   }
 
   const saveMatch = (event: FormEvent) => {
     event.preventDefault()
     if (!matchDraft.homeTeamId || !matchDraft.awayTeamId || matchDraft.homeTeamId === matchDraft.awayTeamId) return
+    if (!teamById.has(matchDraft.homeTeamId) || !teamById.has(matchDraft.awayTeamId)) {
+      setAdminError('Lütfen geçerli iki takım seç.')
+      setMatchDraft(createDefaultMatchDraft(data.teams))
+      setGoalDrafts([])
+      return
+    }
     if (hasGoalErrors) return
 
     const players = [...data.players]
@@ -626,17 +640,11 @@ function App() {
     saveData(initialData)
     setGoalDrafts([])
     setEditingMatchId('')
-    setMatchDraft({
-      homeTeamId: initialData.teams[0].id,
-      awayTeamId: initialData.teams[1].id,
-      status: 'played',
-      scheduledAt: defaultDateTime,
-      homeScore: 0,
-      awayScore: 0,
-    })
+    setMatchDraft(createDefaultMatchDraft(initialData.teams))
   }
 
-  const availableMatchTeams = [matchDraft.homeTeamId, matchDraft.awayTeamId].filter(Boolean)
+  const availableMatchTeams = [...new Set([matchDraft.homeTeamId, matchDraft.awayTeamId])]
+    .filter((teamId) => Boolean(teamId) && teamById.has(teamId))
   const canCreateMatch = data.teams.length >= 2
 
   return (
